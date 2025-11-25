@@ -11,9 +11,9 @@ import (
 var Conn *pgx.Conn // Exported variable
 
 func InitDB() {
-	dsn := os.Getenv("SUPABASE_DB_URL")
+	dsn := os.Getenv("NEON_DB_URL")
 	if dsn == "" {
-		log.Fatal("SUPABASE_DB_URL is missing")
+		log.Fatal("NEON_DB_URL is missing")
 	}
 
 	var err error
