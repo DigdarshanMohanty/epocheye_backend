@@ -16,9 +16,9 @@ const (
 
 // GenerateJWT — creates access + refresh tokens
 func GenerateJWT(email string, accessTTL, refreshTTL time.Duration) (string, string, time.Time, time.Time, error) {
-		genAt := time.Now()
-		accessExp := genAt.Add(defaultAccessTTL)
-		refreshExp := genAt.Add(defaultRefreshTTL)
+	genAt := time.Now()
+	accessExp := genAt.Add(defaultAccessTTL)
+	refreshExp := genAt.Add(defaultRefreshTTL)
 
 	// Access token
 	accessClaims := jwt.MapClaims{

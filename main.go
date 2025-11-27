@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"example.com/m/apis/findplaces"
+	"example.com/m/apis/users"
 	"example.com/m/auth"
 	"example.com/m/auth/login"
 	"example.com/m/auth/signup"
@@ -41,6 +42,8 @@ func main() {
 
 	// ✅ Find Places API route (protected by middleware)
 	mux.Handle("/findplaces", middleware.Auth(http.HandlerFunc(findplaces.FindPlacesHandler)))
+
+	mux.Handle("/api/user/", http.StripPrefix("/api/user", users.Routes()))
 
 	log.Println("🚀 Server running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
