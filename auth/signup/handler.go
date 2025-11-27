@@ -41,9 +41,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Conn.Exec(
 		r.Context(),
-		`INSERT INTO users (uuid, email, password_hash, created_at)
-     VALUES ($1, $2, $3, $4)`,
-		uid, req.Email, string(hashed), time.Now(),
+		`INSERT INTO users (uuid, email, password_hash, name, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+		uid, req.Email, string(hashed), req.Name, time.Now(), time.Now(),
 	)
 	if err != nil {
 		if pgErr, ok := err.(*pgx.PgError); ok {
@@ -55,8 +55,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Signup successful",
 		"uid":     uid,
 	})
+
 }
