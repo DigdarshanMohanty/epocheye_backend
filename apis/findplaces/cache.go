@@ -4,47 +4,42 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/jackc/pgx/v5"
 )
 
-var ctx = context.Background()
-var Rdb *redis.Client
-
-func InitRedis() {
-	Rdb = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	})
-
-	if _, err := Rdb.Ping(ctx).Result(); err != nil {
-		panic("❌ Redis not reachable: " + err.Error())
-	}
-	fmt.Println("✅ Connected to Redis")
+func BuildCacheKey(lat, lon float64, radius int, category string) string {
+	return fmt.Sprintf("%.4f:%.4f:%d:%s", lat, lon, radius, category)
 }
 
-// func CacheResponse(key string, data FindPlacesResponse) error {
-// 	bytes, err := json.Marshal(data)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return Rdb.Set(ctx, key, bytes, 5*time.Minute).Err()
-// }
+func GetCachedResponse(ctx context.Context, conn *pgx.Conn, key string) (FindPlacesResponse, float64, float64, bool) {
+	var raw []byte
+	var lat, lon float64
+	err := conn.QueryRow(ctx,
+		`SELECT response, latitude, longitude FROM poi_cache WHERE cache_key=$1`,
+		key,
+	).Scan(&raw, &lat, &lon)
 
-//	func GetCachedResponse(key string) (*FindPlacesResponse, bool) {
-//		val, err := Rdb.Get(ctx, key).Result()
-//		if err != nil {
-//			return nil, false
-//		}
-//		var res FindPlacesResponse
-//		if err := json.Unmarshal([]byte(val), &res); err != nil {
-//			return nil, false
-//		}
-//		return &res, true
-//	}
-func SetCachedResponse(key string, value interface{}, duration time.Duration) {
-	bytes, _ := json.Marshal(value)
-	Rdb.Set(ctx, key, bytes, duration)
+	if err != nil {
+		return FindPlacesResponse{}, 0, 0, false
+	}
+
+	var res FindPlacesResponse
+	_ = json.Unmarshal(raw, &res)
+	return res, lat, lon, true
+}
+
+func CacheResponse(ctx context.Context, conn *pgx.Conn, key string,
+	lat, lon float64, radius int, category string, res FindPlacesResponse) error {
+
+	raw, _ := json.Marshal(res)
+
+	_, err := conn.Exec(ctx,
+		`INSERT INTO poi_cache(cache_key,latitude,longitude,radius,category,response)
+		VALUES($1,$2,$3,$4,$5,$6)
+		ON CONFLICT(cache_key) DO UPDATE
+		SET response=EXCLUDED.response`,
+		key, lat, lon, radius, category, raw,
+	)
+	return err
 }

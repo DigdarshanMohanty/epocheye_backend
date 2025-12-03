@@ -2,198 +2,227 @@ package users
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"time"
 
 	"example.com/m/db"
 	"example.com/m/middleware"
+	"example.com/m/utils"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
-type UpdateMeRequest struct {
-	Name        *string                `json:"name"`
-	Phone       *string                `json:"phone"`
-	AvatarURL   *string                `json:"avatar_url"`
+type UserProfile struct {
+	UUID        string                 `json:"uuid"`
+	Email       string                 `json:"email"`
+	Phone       *string                `json:"phone,omitempty"`
+	Name        string                 `json:"name"`
+	AvatarURL   *string                `json:"avatar_url,omitempty"`
 	Preferences map[string]interface{} `json:"preferences"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	LastLogin   *time.Time             `json:"last_login,omitempty"`
 }
 
-// --- Utility: Get UUID from email ---
-func getUUID(r *http.Request) (string, error) {
-	email := middleware.GetUserEmail(r)
+func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	var uuid string
-	err := db.Conn.QueryRow(
-		r.Context(),
-		`SELECT uuid FROM users WHERE email=$1`,
-		email,
-	).Scan(&uuid)
-
-	return uuid, err
-}
-
-// --- GET /api/user/me ---
-func GetMe(w http.ResponseWriter, r *http.Request) {
-	uid, err := getUUID(r)
+	uuidStr, err := utils.GetUserUUIDFromCtx(ctx)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	var (
-		email, phone, name, avatar string
-		preferences                []byte
-		createdAt, updatedAt       string
-		lastLogin                  *string
-	)
+	var profile UserProfile
+	var preferences []byte
 
-	err = db.Conn.QueryRow(
-		r.Context(),
-		`SELECT email, phone, name, avatar_url, preferences,
-		        created_at, updated_at, last_login
-		   FROM users
-		  WHERE uuid=$1`,
-		uid,
+	err = db.Conn.QueryRow(ctx,
+		`SELECT uuid, email, phone, name, avatar_url, preferences, created_at, updated_at, last_login
+		 FROM users WHERE uuid=$1`,
+		uuidStr,
 	).Scan(
-		&email, &phone, &name, &avatar, &preferences,
-		&createdAt, &updatedAt, &lastLogin,
+		&profile.UUID,
+		&profile.Email,
+		&profile.Phone,
+		&profile.Name,
+		&profile.AvatarURL,
+		&preferences,
+		&profile.CreatedAt,
+		&profile.UpdatedAt,
+		&profile.LastLogin,
 	)
 
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		if err == pgx.ErrNoRows {
+			log.Printf("❌ No user found for UUID: %s", uuidStr)
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("🔥 DB Error fetching user profile: %+v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"uuid":        uid,
-		"email":       email,
-		"phone":       phone,
-		"name":        name,
-		"avatar_url":  avatar,
-		"preferences": json.RawMessage(preferences),
-		"created_at":  createdAt,
-		"updated_at":  updatedAt,
-		"last_login":  lastLogin,
-	})
+	// Decode JSONB preferences properly
+	profile.Preferences = map[string]interface{}{}
+	if len(preferences) > 0 {
+		if err := json.Unmarshal(preferences, &profile.Preferences); err != nil {
+			log.Printf("Failed to unmarshal preferences: %v", err)
+			profile.Preferences = map[string]interface{}{}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(profile)
 }
 
-// --- PUT /api/user/me ---
-func UpdateMe(w http.ResponseWriter, r *http.Request) {
-	uid, err := getUUID(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	uuidVal := ctx.Value(middleware.UserUUIDKey)
+
+	uuidStr, ok := uuidVal.(string)
+	if !ok || uuidStr == "" {
+		http.Error(w, "User UUID missing in request context", http.StatusUnauthorized)
 		return
 	}
 
-	var body map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var payload struct {
+		Name        *string                `json:"name"`
+		Phone       *string                `json:"phone"`
+		Preferences map[string]interface{} `json:"preferences"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	_, err = db.Conn.Exec(
-		r.Context(),
-		`UPDATE users
-		    SET name        = COALESCE($1, name),
-		        phone       = COALESCE($2, phone),
-		        avatar_url  = COALESCE($3, avatar_url),
-		        preferences = COALESCE($4, preferences),
-		        updated_at  = NOW()
-		  WHERE uuid=$5`,
-		body["name"],
-		body["phone"],
-		body["avatar_url"],
-		body["preferences"],
-		uid,
-	)
-
+	prefsJSON, err := json.Marshal(payload.Preferences)
 	if err != nil {
-		http.Error(w, "Update failed", http.StatusInternalServerError)
+		http.Error(w, "Failed to serialize preferences", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Profile updated",
-	})
+	_, err = db.Conn.Exec(r.Context(),
+		`UPDATE users SET name=COALESCE($1, name),
+                        phone=COALESCE($2, phone),
+                        preferences=COALESCE($3, preferences),
+                        updated_at=NOW()
+     WHERE uuid=$4`,
+		payload.Name,
+		payload.Phone,
+		prefsJSON,
+		uuidStr,
+	)
+	if err != nil {
+		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
 
-// --- GET /api/user/badges ---
-func GetBadges(w http.ResponseWriter, r *http.Request) {
-	uid, err := getUUID(r)
+func UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	uuidStr, err := utils.GetUserUUIDFromCtx(ctx)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	rows, err := db.Conn.Query(
-		r.Context(),
-		`SELECT badge_id, earned_at
-		   FROM user_badges
-		  WHERE user_uuid=$1`,
-		uid,
-	)
+	r.Body = http.MaxBytesReader(w, r.Body, 5<<20) // 5MB
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		http.Error(w, "File too big", http.StatusBadRequest)
+		return
+	}
 
+	file, _, err := r.FormFile("avatar")
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		http.Error(w, "Avatar file required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	fileName := fmt.Sprintf("%s_%s", uuidStr, uuid.New().String())
+	url, err := middleware.UploadFile(ctx, fileBytes, fileName)
+	if err != nil || url == "" {
+		http.Error(w, "Failed to upload avatar", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Conn.Exec(ctx,
+		`UPDATE users SET avatar_url=$1, updated_at=NOW() WHERE uuid=$2`,
+		url, uuidStr,
+	)
+	if err != nil {
+		http.Error(w, "Failed to save avatar URL", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"avatar_url": url})
+}
+
+type UserStats struct {
+	Badges     int `json:"badges"`
+	Challenges struct {
+		Total    int            `json:"total"`
+		Pending  int            `json:"pending"`
+		Progress map[string]int `json:"progress_by_status"`
+	} `json:"challenges"`
+}
+
+func GetStatsHandler(w http.ResponseWriter, r *http.Request) {
+	uuidStr, err := utils.GetUserUUIDFromCtx(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var stats UserStats
+
+	// badges
+	err = db.Conn.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM user_badges WHERE user_uuid=$1`, uuidStr).Scan(&stats.Badges)
+	if err != nil {
+		http.Error(w, "Failed to get badges", http.StatusInternalServerError)
+		return
+	}
+
+	// challenges
+	stats.Challenges.Progress = make(map[string]int)
+	rows, err := db.Conn.Query(r.Context(),
+		`SELECT status, COUNT(*) FROM user_challenges WHERE user_uuid=$1 GROUP BY status`, uuidStr)
+	if err != nil {
+		http.Error(w, "Failed to get challenges", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	result := []map[string]interface{}{}
-
+	totalChallenges := 0
 	for rows.Next() {
-		var (
-			badgeID  string
-			earnedAt string
-		)
-
-		rows.Scan(&badgeID, &earnedAt)
-
-		result = append(result, map[string]interface{}{
-			"badge_id":  badgeID,
-			"earned_at": earnedAt,
-		})
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			continue
+		}
+		stats.Challenges.Progress[status] = count
+		totalChallenges += count
 	}
+	stats.Challenges.Total = totalChallenges
+	stats.Challenges.Pending = stats.Challenges.Progress["pending"]
 
-	json.NewEncoder(w).Encode(result)
-}
-
-// --- GET /api/user/challenges ---
-func GetChallenges(w http.ResponseWriter, r *http.Request) {
-	uid, err := getUUID(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-
-	rows, err := db.Conn.Query(
-		r.Context(),
-		`SELECT challenge_id, status, progress
-		   FROM user_challenges
-		  WHERE user_uuid=$1`,
-		uid,
-	)
-
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	result := []map[string]interface{}{}
-
-	for rows.Next() {
-		var (
-			cid      string
-			status   string
-			progress int
-		)
-
-		rows.Scan(&cid, &status, &progress)
-
-		result = append(result, map[string]interface{}{
-			"challenge_id": cid,
-			"status":       status,
-			"progress":     progress,
-		})
-	}
-
-	json.NewEncoder(w).Encode(result)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }

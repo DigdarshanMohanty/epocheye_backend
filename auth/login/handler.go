@@ -8,6 +8,7 @@ import (
 
 	"example.com/m/auth"
 	"example.com/m/db"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,7 +17,7 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-type JSONResponse map[string]interface{}
+type JSONResponse map[string]any
 
 func jsonError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -42,12 +43,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var uid, storedHash string
+	var UUID uuid.UUID
+	var storedHash string
 	err := db.Conn.QueryRow(
 		r.Context(),
 		`SELECT uuid, password_hash FROM users WHERE email=$1`,
 		req.Email,
-	).Scan(&uid, &storedHash)
+	).Scan(&UUID, &storedHash)
 
 	if err != nil {
 		jsonError(w, "Invalid email or password", http.StatusUnauthorized)
@@ -59,18 +61,23 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate access + refresh tokens
-	accessToken, refreshToken, genAt, accessExp, err := auth.GenerateJWT(req.Email, 0, 0)
+	// if err != nil {
+	// 	jsonError(w, "Invalid user UUID stored in DB", http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// Correct mapping for GenerateJWT
+	_, accessToken, refreshToken, genAt, accessExp, err := auth.GenerateJWT(UUID, req.Email, 0, 0)
 	if err != nil {
 		log.Printf("JWT generation error: %+v\n", err)
 		jsonError(w, "Could not generate tokens", http.StatusInternalServerError)
 		return
 	}
 
-	// Success response
+	// Success
 	jsonSuccess(w, JSONResponse{
 		"message":       "Login successful",
-		"uid":           uid,
+		"uid":           UUID,
 		"accessToken":   accessToken,
 		"refreshToken":  refreshToken,
 		"generatedAt":   genAt.Format(time.RFC3339),

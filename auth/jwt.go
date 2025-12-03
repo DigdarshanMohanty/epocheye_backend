@@ -1,56 +1,55 @@
 package auth
 
 import (
-	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var jwtSecret = []byte("epocheye")
 
 const (
-	defaultAccessTTL  = 2 * time.Hour
+	defaultAccessTTL  = 30 * 24 * time.Hour
 	defaultRefreshTTL = 7 * 24 * time.Hour
 )
 
-// GenerateJWT — creates access + refresh tokens
-func GenerateJWT(email string, accessTTL, refreshTTL time.Duration) (string, string, time.Time, time.Time, error) {
+func GenerateJWT(userUUID uuid.UUID, email string, accessTTL, refreshTTL time.Duration) (uuid.UUID, string, string, time.Time, time.Time, error) {
 	genAt := time.Now()
 	accessExp := genAt.Add(defaultAccessTTL)
 	refreshExp := genAt.Add(defaultRefreshTTL)
 
-	// Access token
 	accessClaims := jwt.MapClaims{
-		"email": email,
-		"exp":   accessExp.Unix(),
-		"type":  "access",
+		"user_uuid": userUUID,
+		"email":     email,
+		"exp":       accessExp.Unix(),
+		"type":      "access",
 	}
+
 	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(jwtSecret)
 	if err != nil {
-		return "", "", genAt, accessExp, err
+		return userUUID, "", "", genAt, accessExp, err
 	}
 
-	// Refresh token
 	refreshClaims := jwt.MapClaims{
-		"email": email,
-		"exp":   refreshExp.Unix(),
-		"type":  "refresh",
+		"user_uuid": userUUID,
+		"email":     email,
+		"exp":       refreshExp.Unix(),
+		"type":      "refresh",
 	}
+
 	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(jwtSecret)
 	if err != nil {
-		return "", "", genAt, accessExp, err
+		return userUUID, accessToken, "", genAt, accessExp, err
 	}
 
-	return accessToken, refreshToken, genAt, accessExp, nil
+	return userUUID, accessToken, refreshToken, genAt, accessExp, nil
 }
-
-// ValidateJWT validates a JWT token and returns the claims
 func ValidateJWT(tokenString string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate the signing method
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+		// ensure it's signed with HMAC
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+			return nil, jwt.ErrSignatureInvalid
 		}
 		return jwtSecret, nil
 	})
@@ -60,20 +59,18 @@ func ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, jwt.ErrSignatureInvalid
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New("invalid token claims")
+		return nil, jwt.ErrInvalidType
 	}
 
-	// Check if token is expired
-	if exp, ok := claims["exp"]; ok {
-		if expTime, ok := exp.(float64); ok {
-			if time.Now().Unix() > int64(expTime) {
-				return nil, errors.New("token expired")
-			}
+	// Check expiration time
+	if exp, ok := claims["exp"].(float64); ok {
+		if time.Now().Unix() > int64(exp) {
+			return nil, jwt.ErrTokenExpired
 		}
 	}
 

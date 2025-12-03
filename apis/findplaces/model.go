@@ -1,7 +1,7 @@
 package findplaces
 
 type Place struct {
-	ID             string   `json:"id"`
+	PlaceID        string   `json:"id"`
 	Name           string   `json:"name"`
 	Lat            float64  `json:"lat"`
 	Lon            float64  `json:"lon"`
@@ -18,14 +18,13 @@ type Place struct {
 }
 
 type FindPlacesRequest struct {
-	Latitude     float64  `json:"latitude"`
-	Longitude    float64  `json:"longitude"`
-	RadiusMeters int      `json:"radius_meters"`
-	Categories   []string `json:"categories"`
-	Limit        int      `json:"limit"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
+	RadiusMeters int     `json:"radius_meters"`
+	Limit        int     `json:"limit"`
 }
 
 type FindPlacesResponse struct {
-	Places      []Place  `json:"places"`
-	GeneratedAt string   `json:"generated_at"`
+	Places      []Place `json:"places"`
+	GeneratedAt string  `json:"generated_at"`
 }
