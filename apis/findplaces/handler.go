@@ -9,6 +9,18 @@ import (
 	"example.com/m/db"
 )
 
+// Handler finds places based on location
+// @Summary Find Places
+// @Description Search for places based on latitude, longitude, and radius
+// @Tags places
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body FindPlacesRequest true "Search Criteria"
+// @Success 200 {object} FindPlacesResponse
+// @Failure 400 {object} map[string]string "Invalid input"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /findplaces [post]
 func Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

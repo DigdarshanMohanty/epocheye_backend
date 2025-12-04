@@ -18,6 +18,22 @@ type SignupRequest struct {
 	Name     string `json:"name"`
 }
 
+type SignupResponse struct {
+	Message string `json:"message"`
+	UID     string `json:"uid"`
+}
+
+// Handler handles user signup
+// @Summary User Signup
+// @Description Registers a new user
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body SignupRequest true "Signup Details"
+// @Success 200 {object} SignupResponse
+// @Failure 400 {object} map[string]string "Invalid JSON"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /signup [post]
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

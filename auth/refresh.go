@@ -19,6 +19,18 @@ type refreshResponse struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
+// RefreshHandler refreshes access token
+// @Summary Refresh Access Token
+// @Description Generates a new access token using a valid refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body refreshRequest true "Refresh Token"
+// @Success 200 {object} refreshResponse
+// @Failure 400 {object} map[string]string "Invalid JSON"
+// @Failure 401 {object} map[string]string "Invalid token"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /refresh [post]
 func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

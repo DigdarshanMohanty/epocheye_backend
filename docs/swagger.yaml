@@ -1,0 +1,673 @@
+basePath: /
+definitions:
+  auth.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  auth.refreshResponse:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: string
+      generated_at:
+        type: string
+    type: object
+  findplaces.FindPlacesRequest:
+    properties:
+      latitude:
+        type: number
+      limit:
+        type: integer
+      longitude:
+        type: number
+      radius_meters:
+        type: integer
+    type: object
+  findplaces.FindPlacesResponse:
+    properties:
+      generated_at:
+        type: string
+      places:
+        items:
+          $ref: '#/definitions/findplaces.Place'
+        type: array
+    type: object
+  findplaces.Place:
+    properties:
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      categories:
+        items:
+          type: string
+        type: array
+      city:
+        type: string
+      country:
+        type: string
+      distance_meters:
+        type: number
+      formatted:
+        type: string
+      id:
+        type: string
+      lat:
+        type: number
+      lon:
+        type: number
+      name:
+        type: string
+      postcode:
+        type: string
+      state:
+        type: string
+      street:
+        type: string
+    type: object
+  login.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  login.LoginResponse:
+    properties:
+      accessExpires:
+        type: string
+      accessToken:
+        type: string
+      generatedAt:
+        type: string
+      message:
+        type: string
+      refreshToken:
+        type: string
+      uid:
+        type: string
+    type: object
+  signup.SignupRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  signup.SignupResponse:
+    properties:
+      message:
+        type: string
+      uid:
+        type: string
+    type: object
+  useractions.PlaceRequest:
+    properties:
+      place_id:
+        type: string
+    type: object
+  users.UpdateProfileRequest:
+    properties:
+      name:
+        type: string
+      phone:
+        type: string
+      preferences:
+        additionalProperties: true
+        type: object
+    type: object
+  users.UserProfile:
+    properties:
+      avatar_url:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      last_login:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      preferences:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+      uuid:
+        type: string
+    type: object
+  users.UserStats:
+    properties:
+      badges:
+        type: integer
+      challenges:
+        properties:
+          pending:
+            type: integer
+          progress_by_status:
+            additionalProperties:
+              type: integer
+            type: object
+          total:
+            type: integer
+        type: object
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is the backend API for the project.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Backend API
+  version: "1.0"
+paths:
+  /api/user/avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a new avatar image for the authenticated user
+      parameters:
+      - description: Avatar File
+        in: formData
+        name: avatar
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: avatar_url
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid file
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload Avatar
+      tags:
+      - users
+  /api/user/profile:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.UserProfile'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get User Profile
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Update the authenticated user's profile details
+      parameters:
+      - description: Profile Updates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/users.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid JSON
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update User Profile
+      tags:
+      - users
+  /api/user/save-place:
+    post:
+      consumes:
+      - application/json
+      description: Save a place to the user's saved places
+      parameters:
+      - description: Place Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/useractions.PlaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: saved'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid place_id
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Save Place
+      tags:
+      - useractions
+  /api/user/save-place/{place_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a place from the user's saved places
+      parameters:
+      - description: Place ID
+        in: path
+        name: place_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: removed'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Missing place_id
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove Saved Place
+      tags:
+      - useractions
+  /api/user/saved-places:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of saved places for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: saved_places
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Saved Places
+      tags:
+      - useractions
+  /api/user/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve statistics for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.UserStats'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get User Stats
+      tags:
+      - users
+  /api/user/visit:
+    post:
+      consumes:
+      - application/json
+      description: Log a visit to a specific place
+      parameters:
+      - description: Place Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/useractions.PlaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: visited'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid place_id
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Log Visit
+      tags:
+      - useractions
+  /api/user/visit-history:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the visit history for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: visit_history
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Visit History
+      tags:
+      - useractions
+  /findplaces:
+    post:
+      consumes:
+      - application/json
+      description: Search for places based on latitude, longitude, and radius
+      parameters:
+      - description: Search Criteria
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/findplaces.FindPlacesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/findplaces.FindPlacesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Find Places
+      tags:
+      - places
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user and returns JWT tokens
+      parameters:
+      - description: Login Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/login.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/login.LoginResponse'
+        "400":
+          description: Invalid JSON
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid email or password
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User Login
+      tags:
+      - auth
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Generates a new access token using a valid refresh token
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.refreshResponse'
+        "400":
+          description: Invalid JSON
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh Access Token
+      tags:
+      - auth
+  /signup:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user
+      parameters:
+      - description: Signup Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/signup.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/signup.SignupResponse'
+        "400":
+          description: Invalid JSON
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User Signup
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

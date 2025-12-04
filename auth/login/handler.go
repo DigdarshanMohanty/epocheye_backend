@@ -19,6 +19,15 @@ type LoginRequest struct {
 
 type JSONResponse map[string]any
 
+type LoginResponse struct {
+	Message       string `json:"message"`
+	UID           string `json:"uid"`
+	AccessToken   string `json:"accessToken"`
+	RefreshToken  string `json:"refreshToken"`
+	GeneratedAt   string `json:"generatedAt"`
+	AccessExpires string `json:"accessExpires"`
+}
+
 func jsonError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -31,6 +40,18 @@ func jsonSuccess(w http.ResponseWriter, payload JSONResponse) {
 	json.NewEncoder(w).Encode(payload)
 }
 
+// Handler handles user login
+// @Summary User Login
+// @Description Authenticates a user and returns JWT tokens
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login Credentials"
+// @Success 200 {object} LoginResponse
+// @Failure 400 {object} map[string]string "Invalid JSON"
+// @Failure 401 {object} map[string]string "Invalid email or password"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /login [post]
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
