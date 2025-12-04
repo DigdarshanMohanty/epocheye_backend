@@ -27,6 +27,18 @@ type UserProfile struct {
 	LastLogin   *time.Time             `json:"last_login,omitempty"`
 }
 
+// GetProfileHandler returns the current user's profile
+// @Summary Get User Profile
+// @Description Retrieve the authenticated user's profile
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} UserProfile
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 404 {object} map[string]string "User not found"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /api/user/profile [get]
 func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -80,6 +92,25 @@ func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(profile)
 }
 
+type UpdateProfileRequest struct {
+	Name        *string                `json:"name"`
+	Phone       *string                `json:"phone"`
+	Preferences map[string]interface{} `json:"preferences"`
+}
+
+// UpdateProfileHandler updates the current user's profile
+// @Summary Update User Profile
+// @Description Update the authenticated user's profile details
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body UpdateProfileRequest true "Profile Updates"
+// @Success 204 "No Content"
+// @Failure 400 {object} map[string]string "Invalid JSON"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /api/user/profile [put]
 func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	uuidVal := ctx.Value(middleware.UserUUIDKey)
@@ -90,11 +121,7 @@ func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload struct {
-		Name        *string                `json:"name"`
-		Phone       *string                `json:"phone"`
-		Preferences map[string]interface{} `json:"preferences"`
-	}
+	var payload UpdateProfileRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -126,6 +153,19 @@ func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
 
+// UploadAvatarHandler uploads a new avatar for the user
+// @Summary Upload Avatar
+// @Description Upload a new avatar image for the authenticated user
+// @Tags users
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param avatar formData file true "Avatar File"
+// @Success 200 {object} map[string]string "avatar_url"
+// @Failure 400 {object} map[string]string "Invalid file"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /api/user/avatar [post]
 func UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -183,6 +223,17 @@ type UserStats struct {
 	} `json:"challenges"`
 }
 
+// GetStatsHandler returns user statistics
+// @Summary Get User Stats
+// @Description Retrieve statistics for the authenticated user
+// @Tags users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} UserStats
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /api/user/stats [get]
 func GetStatsHandler(w http.ResponseWriter, r *http.Request) {
 	uuidStr, err := utils.GetUserUUIDFromCtx(r.Context())
 	if err != nil {
